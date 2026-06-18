@@ -187,7 +187,7 @@
         let matIdCounter = 0;
 
         function loadTex(file, trans = false, col = 0xffffff) {
-            const t = textureLoader.load(file); t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            const t = textureLoader.load('${"https://fishnerds.neocities.org/craft/"} ${file}'); t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
             const m = new THREE.MeshLambertMaterial({ map: t, color: col, transparent: trans, alphaTest: trans ? 0.5 : 0, side: trans ? THREE.DoubleSide : THREE.FrontSide });
             matIds.set(m, 'm' + (matIdCounter++)); uiIcons.set(m, file); return m;
         }
