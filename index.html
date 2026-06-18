@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Craft - Voxel Engine (Beta v12.5)</title>
+    <style>
+        /* Authentic Mojangles Font */
+        @font-face {
+            font-family: 'Mojangles';
+            src: url('https://files.catbox.moe/cgo0o2.woff2') format('woff2');
+        }
+
+        body {
+            margin: 0; overflow: hidden; background-color: #78A7FF; /* Minecraft Sky Blue */
+            font-family: 'Mojangles', sans-serif; user-select: none;
+        }
+
+        /* --- UI Overlays --- */
+        #welcome-screen {
+            position: absolute; width: 100%; height: 100%; z-index: 100;
+            background-color: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center;
+        }
+        #welcome-window {
+            background: url('map_background.png'); background-size: cover; image-rendering: pixelated;
+            padding: 30px; width: 480px; text-align: center; color: #333; border: 4px solid #111;
+        }
+        #welcome-window h2 { margin-top: 0; font-size: 32px; }
+        #welcome-window p { font-size: 18px; text-align: left; line-height: 1.4; }
+        #welcome-btn {
+            background: #737373; border: 3px solid #000; color: white;
+            font-family: 'Mojangles'; font-size: 20px; padding: 12px 40px;
+            cursor: pointer; box-shadow: inset 3px 3px 0 #999, inset -3px -3px 0 #333; margin-top: 15px;
+        }
+        #welcome-btn:hover { background: #8a8a8a; }
+        
+        #blocker {
+            position: absolute; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6); display: none; flex-direction: column;
+            align-items: center; justify-content: center; color: white; cursor: pointer; z-index: 10;
+        }
+        #blocker h2 { font-size: 48px; margin-bottom: 10px; color: white; text-shadow: 4px 4px 0 #000; }
+        #blocker p { color: white; text-shadow: 2px 2px 0 #000; font-size: 24px; }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
+            transform: translate(-50%, -50%); pointer-events: none; z-index: 5;
+        }
+        #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255, 255, 255, 0.9); mix-blend-mode: difference; }
+        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
+        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+        
+        /* --- Inventory & Hotbar --- */
+        #hotbar-container {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 2px; padding: 4px; background: rgba(30, 30, 30, 0.6); border: 2px solid #111; z-index: 5;
+        }
+        .slot {
+            width: 44px; height: 44px; background: rgba(139, 139, 139, 0.4); border: 2px solid #555;
+            box-shadow: inset -2px -2px 0px rgba(0,0,0,0.5), inset 2px 2px 0px rgba(255,255,255,0.5); position: relative;
+        }
+        .slot.active { border-color: #fff; background: rgba(200, 200, 200, 0.6); box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        .item-icon { width: 32px; height: 32px; margin: 4px; background-size: contain; image-rendering: pixelated; pointer-events: none; }
+        .item-count { position: absolute; bottom: 2px; right: 4px; color: white; font-size: 14px; text-shadow: 2px 2px 0 #000; }
+
+        #inventory-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 20;
+        }
+        #inventory-window { background: url('map_background.png'); background-size: cover; image-rendering: pixelated; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .inv-grid { display: grid; gap: 4px; }
+        #mouse-item { position: absolute; pointer-events: none; z-index: 999; width: 32px; height: 32px; background-size: contain; image-rendering: pixelated; display: none; }
+        
+        /* --- Chat --- */
+        #chat-container { position: absolute; bottom: 80px; left: 20px; z-index: 15; width: 400px; pointer-events: none; color: white; text-shadow: 2px 2px 0 #000; }
+        #chat-messages { display: flex; flex-direction: column; gap: 5px; margin-bottom: 5px; }
+        #chat-input { display: none; width: 100%; background: rgba(0,0,0,0.5); color: white; border: 2px solid #555; font-family: 'Mojangles'; padding: 4px; pointer-events: auto; outline: none; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <audio id="bgMusic" preload="auto" volume="0.1"></audio>
+
+    <div id="welcome-screen">
+        <div id="welcome-window">
+            <h2>Welcome to Craft!</h2>
+            <p>Welcome to Craft, the free online voxel-based adventure game! Have fun!</p>
+            <div style="background: rgba(0,0,0,0.05); padding: 10px; border: 1px solid rgba(0,0,0,0.1); text-align: left; font-size: 14px;">
+                <b>Controls:</b><br>
+                - <b>W, A, S, D</b> to Move | <b>Space</b> to Jump<br>
+                - <b>Hold Left Click</b> to Mine/Attack | <b>Right Click</b> to Place/Interact<br>
+                - <b>E</b> for Inventory & Crafting<br>
+                - <b>T</b> to open Chat
+            </div>
+            <button id="welcome-btn">Enter World</button>
+        </div>
+    </div>
+
+    <div id="blocker"><h2>Paused</h2><p>Click to resume</p></div>
+    <div id="crosshair"></div>
+    <div id="hotbar-container"></div>
+    <div id="chat-container"><div id="chat-messages"></div><input type="text" id="chat-input" maxlength="60" autocomplete="off" placeholder="> "></div>
+
+    <div id="inventory-screen">
+        <div id="inventory-window">
+            <h3 style="margin:0; color:#333;" id="inv-title">Crafting</h3>
+            <div style="display:flex; gap: 20px; align-items:center;">
+                <div class="inv-grid" id="crafting-grid"></div>
+                <div style="font-size:24px; color:#333;">➔</div>
+                <div class="slot" id="crafting-output"></div>
+            </div>
+            <h3 style="margin:0; color:#333;">Inventory</h3>
+            <div class="inv-grid" id="main-inventory" style="grid-template-columns: repeat(9, 44px);"></div>
+            <div class="inv-grid" id="hotbar-inventory" style="grid-template-columns: repeat(9, 44px);"></div>
+        </div>
+    </div>
+    <div id="mouse-item"><span class="item-count"></span></div>
+
+    <script src="three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+
+    <script>
+        // --- 1. SETUP & ENGINE GLOBALS ---
+        
+        const chunkSize = 16;
+        const renderDistance = 2; // Optimal for deep worlds
+        const WORLD_DEPTH = 32;
+        const WATER_LEVEL = 5;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x78A7FF); 
+        scene.fog = new THREE.Fog(0xFFFFFF, 16, 40); 
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        scene.add(camera); 
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.5); dirLight.position.set(10, 20, 10); scene.add(dirLight);
+
+        // Sun Mesh
+        const sunGeo = new THREE.BoxGeometry(6, 6, 6);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xFFFEE0, fog: false });
+        const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+        scene.add(sunMesh);
+
+        // Held Item Logic
+        const heldItemGroup = new THREE.Group();
+        camera.add(heldItemGroup);
+        let currentHeldMesh = null;
+        let bobTime = 0, swingTime = 0;
+
+        // Core Tracking Maps
+        const worldChunks = new Map();
+        const chunkInstancesMap = new Map();
+        const chunkBlockMap = new Map();
+        const solidBlocks = new Map();
+        const chunkModifications = new Map(); 
+        const chunksGroup = new THREE.Group(); scene.add(chunksGroup);
+        const entitiesGroup = new THREE.Group(); scene.add(entitiesGroup); // Entity Parent Node
+        
+        let lastChunkX = null;
+        let lastChunkZ = null;
+        const dummyMatrix = new THREE.Matrix4();
+        const raycaster = new THREE.Raycaster();
+        const clock = new THREE.Clock();
+        
+        const droppedItems = [];
+        const pigs = [];
+  
+        // --- 2. MUSIC MANAGER ---
+        const tracks = [
+            "https://files.catbox.moe/1plrda.mp3", "https://files.catbox.moe/yvdvu8.mp3",
+            "https://files.catbox.moe/5qwkyh.mp3", "https://files.catbox.moe/pbyn2w.mp3", "https://files.catbox.moe/pbyn2w.mp3",
+        ];
+        const bgMusic = document.getElementById('bgMusic');
+        bgMusic.volume = 0.4; 
+        bgMusic.onended = () => { bgMusic.src = tracks[Math.floor(Math.random() * tracks.length)]; bgMusic.load(); bgMusic.play().catch(e => console.log(e)); bgMusic.volume = 0.2; };
+        bgMusic.onerror = (e) => { setTimeout(() => { bgMusic.volume = 0.2; bgMusic.src = tracks[Math.floor(Math.random() * tracks.length)]; bgMusic.load(); bgMusic.play().catch(err => {}); }, 1000); };
+
+        // --- 3. MATERIALS & ASSETS ---
+        const textureLoader = new THREE.TextureLoader();
+        const matIds = new Map(); const uiIcons = new Map();
+        const nonSolidMats = new Set(); const itemsSet = new Set();
+        let matIdCounter = 0;
+
+        function loadTex(file, trans = false, col = 0xffffff) {
+            const t = textureLoader.load(file); t.magFilter = THREE.NearestFilter; t.wrapS = t.wrapT = THREE.RepeatWrapping;
+            const m = new THREE.MeshLambertMaterial({ map: t, color: col, transparent: trans, alphaTest: trans ? 0.5 : 0, side: trans ? THREE.DoubleSide : THREE.FrontSide });
+            matIds.set(m, 'm' + (matIdCounter++)); uiIcons.set(m, file); return m;
+        }
+
+        function createItem(file) {
+            const m = { isItem: true, file: file };
+            matIds.set(m, 'i' + (matIdCounter++)); uiIcons.set(m, file); itemsSet.add(m); return m;
+        }
+
+        const tex = {
+            stone: loadTex('stone.png'), dirt: loadTex('dirt.png'), cobblestone: loadTex('cobblestone.jpg'),
+            grassTop: loadTex('grass_block_top.png', false, 0x61B044),
+            taigaGrassTop: loadTex('grass_block_top.png', false, 0x619961),
+            leaves: loadTex('oakleaves.png', true, 0x48B54A),
+            spruceLeaves: loadTex('spruce_leaves.png', true, 0x619961), 
+            ice: loadTex('ice.png', true), sand: loadTex('sand.jpg'), gravel: loadTex('gravel.png'),
+            oakSide: loadTex('oak_log.png'), oakTop: loadTex('oak_log_top.png'),
+            spruceSide: loadTex('spruce_log.png'), spruceTop: loadTex('spruce_log_top.png'),
+            oakPlanks: loadTex('oak_planks.png'), bookshelf: loadTex('bookshelf.jpg'),
+            craftFront: loadTex('crafting_table_front.png'), craftSide: loadTex('crafting_table_side.png'), craftTop: loadTex('crafting_table_top.png'),
+            furnaceFront: loadTex('furnace_front.png'), furnaceSide: loadTex('furnace_side.png'), furnaceTop: loadTex('furnace_top.png'),
+            poppy: loadTex('poppy.png', true), torch: loadTex('torch.jpg'), bedrock: loadTex('bedrock.png'),
+            coalOre: loadTex('coalore.png'), ironOre: loadTex('ironore.jpg'), goldOre: loadTex('gold_ore.png'),
+            snowSide: loadTex('snow_block.png'), snowTop: loadTex('snow.jpg')
+        };
+
+        const rawDirtTex = textureLoader.load('dirt.png'); rawDirtTex.magFilter = THREE.NearestFilter;
+        const rawOverlayTex = textureLoader.load('grass_block_overlay.png'); rawOverlayTex.magFilter = THREE.NearestFilter;
+
+        function createGrassShader(tintHex) {
+            const mat = new THREE.MeshLambertMaterial({ map: rawDirtTex });
+            mat.customProgramCacheKey = () => tintHex.toString(); 
+            mat.onBeforeCompile = (s) => {
+                s.uniforms.overlay = { value: rawOverlayTex }; s.uniforms.tint = { value: new THREE.Color(tintHex) };
+                if (s.fragmentShader) {
+                    s.fragmentShader = s.fragmentShader.replace('#include <map_pars_fragment>', '#include <map_pars_fragment>\nuniform sampler2D overlay; uniform vec3 tint;')
+                        .replace('#include <map_fragment>', 'vec4 texColor = texture2D(map, vMapUv); vec4 overColor = texture2D(overlay, vMapUv); diffuseColor = vec4(mix(texColor.rgb, overColor.rgb * tint, overColor.a), 1.0);');
+                }
+            };
+            matIds.set(mat, 'gs' + (matIdCounter++)); uiIcons.set(mat, 'dirt.png');
+            return mat;
+        }
+
+        const plainsGrassSide = createGrassShader(0x61B044);
+        const taigaGrassSide = createGrassShader(0x619961);
+
+        const materials = {
+            grass: [plainsGrassSide, plainsGrassSide, tex.grassTop, tex.dirt, plainsGrassSide, plainsGrassSide],
+            taigaGrass: [taigaGrassSide, taigaGrassSide, tex.taigaGrassTop, tex.dirt, taigaGrassSide, taigaGrassSide],
+            snowGrass: [tex.snowSide, tex.snowSide, tex.snowTop, tex.dirt, tex.snowSide, tex.snowSide],
+            oakLog: [tex.oakSide, tex.oakSide, tex.oakTop, tex.oakTop, tex.oakSide, tex.oakSide],
+            spruceLog: [tex.spruceSide, tex.spruceSide, tex.spruceTop, tex.spruceTop, tex.spruceSide, tex.spruceSide],
+            craftingTable: [tex.craftSide, tex.craftSide, tex.craftTop, tex.oakPlanks, tex.craftFront, tex.craftSide],
+            furnace: [tex.furnaceSide, tex.furnaceSide, tex.furnaceTop, tex.furnaceTop, tex.furnaceFront, tex.furnaceSide],
+            stone: tex.stone, dirt: tex.dirt, leaves: tex.leaves, spruceLeaves: tex.spruceLeaves, ice: tex.ice, cobblestone: tex.cobblestone, oakPlanks: tex.oakPlanks, goldore: tex.goldOre, coalore: tex.coalOre, ironore: tex.ironOre, bedrock: tex.bedrock, sand: tex.sand, gravel: tex.gravel, poppy: tex.poppy, torch: tex.torch, bookshelf: tex.bookshelf,
+            
+            stick: createItem('stick.png'), coal: createItem('coal.jpg'), iron_ingot: createItem('ironingot.png'), gold_ingot: createItem('gold_ingot.png'), gold_nugget: createItem('gold_nugget.png'),
+            w_pick: createItem('wooden_pickaxe.png'), s_pick: createItem('stone_pickaxe.png'), g_pick: createItem('golden_pickaxe.png'),
+            w_axe: createItem('wooden_axe.png'), s_axe: createItem('stone_axe.png'), g_axe: createItem('golden_axe.png'),
+            w_sword: createItem('wooden_sword.png'), s_sword: createItem('stone_sword.png'), g_sword: createItem('golden_sword.png'),
+            w_shovel: createItem('wooden_shovel.png'), s_shovel: createItem('stone_shovel.png'), g_shovel: createItem('golden_shovel.png'),
+            pork_raw: createItem('porkchop.png'), pork_cooked: createItem('cooked_porkchop.png')
+        };
+        
+        const unstackableSet = new Set([
+            materials.w_pick, materials.s_pick, materials.g_pick, materials.w_axe, materials.s_axe, materials.g_axe, 
+            materials.w_sword, materials.s_sword, materials.g_sword, materials.w_shovel, materials.s_shovel, materials.g_shovel
+        ]);
+        function isUnstackable(mat) { return unstackableSet.has(mat); }
+
+        [materials.grass, materials.taigaGrass, materials.snowGrass, materials.oakLog, materials.spruceLog, materials.craftingTable, materials.furnace].forEach(a => matIds.set(a, 'arr' + (matIdCounter++)));
+        
+        uiIcons.set(materials.grass, 'grass_block_top.png'); uiIcons.set(materials.taigaGrass, 'grass_block_top.png'); uiIcons.set(materials.snowGrass, 'snow.jpg'); 
+        uiIcons.set(materials.oakLog, 'oakside.jpg'); uiIcons.set(materials.spruceLog, 'spruce_log.png'); 
+        uiIcons.set(materials.craftingTable, 'crafting_table_front.png'); uiIcons.set(materials.furnace, 'furnace_front.png');
+        nonSolidMats.add(materials.poppy); nonSolidMats.add(materials.torch);
+
+        function initP(m, t, h, req = false) { m.toolType = t; m.hardness = h; m.requiresTool = req; }
+        initP(materials.stone, 'pick', 2.0, true); initP(materials.cobblestone, 'pick', 2.0, true); initP(materials.coalore, 'pick', 3.0, true); initP(materials.ironore, 'pick', 3.0, true); initP(materials.goldore, 'pick', 3.0, true); initP(materials.furnace, 'pick', 2.5, true);
+        initP(materials.dirt, 'shovel', 0.5); initP(materials.grass, 'shovel', 0.6); initP(materials.taigaGrass, 'shovel', 0.6); initP(materials.snowGrass, 'shovel', 0.6); initP(materials.sand, 'shovel', 0.5); initP(materials.gravel, 'shovel', 0.6);
+        initP(materials.oakLog, 'axe', 1.5); initP(materials.spruceLog, 'axe', 1.5); initP(materials.oakPlanks, 'axe', 1.0); initP(materials.craftingTable, 'axe', 1.5); initP(materials.bookshelf, 'axe', 1.2);
+        initP(materials.leaves, 'none', 0.2); initP(materials.spruceLeaves, 'none', 0.2); initP(materials.poppy, 'none', 0.0); initP(materials.torch, 'none', 0.0); initP(materials.ice, 'pick', 0.2); initP(materials.bedrock, 'none', Infinity);
+
+        materials.w_pick.toolType = 'pick'; materials.w_pick.speed = 3.0; materials.s_pick.toolType = 'pick'; materials.s_pick.speed = 6.0; materials.g_pick.toolType = 'pick'; materials.g_pick.speed = 9.0;
+        materials.w_axe.toolType = 'axe'; materials.w_axe.speed = 3.0; materials.s_axe.toolType = 'axe'; materials.s_axe.speed = 6.0; materials.g_axe.toolType = 'axe'; materials.g_axe.speed = 9.0;
+        materials.w_shovel.toolType = 'shovel'; materials.w_shovel.speed = 3.0; materials.s_shovel.toolType = 'shovel'; materials.s_shovel.speed = 6.0; materials.g_shovel.toolType = 'shovel'; materials.g_shovel.speed = 9.0;
+        materials.w_sword.toolType = 'sword'; materials.w_sword.speed = 1.5; materials.s_sword.toolType = 'sword'; materials.s_sword.speed = 1.5; materials.g_sword.toolType = 'sword'; materials.g_sword.speed = 1.5;
+
+      addChatMessage(`[System] ### Welcome to Craft Multiplayer Beta! ###`, true);
+      addChatMessage(`[System] Use /connect [ServerName] to connect to a server.`, true);
+      
+      // --- NETWORK MULTIPLAYER SETUP ---
+const idToMat = new Map();
+// Give it a second to let all materials load, then map them backward for the network
+setTimeout(() => { matIds.forEach((id, mat) => idToMat.set(id, mat)); }, 1000);
+
+let myPeerId = null;
+const peers = {}; // Store active connections
+const playerMeshes = {}; // Store 3D boxes representing other players
+
+const peer = new Peer(); // Connects to the free PeerJS cloud signaling server
+peer.on('open', id => {
+    myPeerId = id;
+    console.log('My ID:', id);
+    // Tell the player their ID once they load in
+    setTimeout(() => addChatMessage(`[System] Multiplayer active! Your ID is: ${id}`, true), 2000);
+});
+
+// When someone connects to YOU
+peer.on('connection', conn => {
+    setupConnection(conn);
+    addChatMessage(`[System] Player joined!`, true);
+});
+
+function setupConnection(conn) {
+    peers[conn.peer] = conn;
+    
+    // Listen for their data
+    conn.on('data', data => handleNetworkData(conn.peer, data));
+    
+    // Handle disconnects
+    conn.on('close', () => {
+        if (playerMeshes[conn.peer]) {
+            scene.remove(playerMeshes[conn.peer]);
+            delete playerMeshes[conn.peer];
+        }
+        delete peers[conn.peer];
+        addChatMessage(`[System] A player left.`, true);
+    });
+}
+
+function broadcast(data) {
+    for (let id in peers) {
+        if (peers[id] && peers[id].open) peers[id].send(data);
+    }
+}
+
+      function handleNetworkData(peerId, data) {
+    // 1. Update other player's position
+    if (data.type === 'move') {
+        if (!playerMeshes[peerId]) {
+            // Create a dummy body for the other player
+            const geo = new THREE.BoxGeometry(0.8, 1.8, 0.8);
+            const mat = new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff });
+            const mesh = new THREE.Mesh(geo, mat);
+            scene.add(mesh);
+            playerMeshes[peerId] = mesh;
+        }
+        // Move them smoothly or snap them
+        playerMeshes[peerId].position.set(data.x, data.y, data.z);
+    } 
+    
+    // 2. Sync block placements/breaks
+    else if (data.type === 'block') {
+        if (data.action === 'place') {
+            const mat = idToMat.get(data.matId);
+            if (mat) placeBlock(data.x, data.y, data.z, mat, chunksGroup, true);
+        } else if (data.action === 'break') {
+            removeBlockVisual(data.x, data.y, data.z);
+        }
+    }
+}
+
+// Helper to remove blocks over the network
+function removeBlockVisual(tx, ty, tz) {
+    const bKey = `${tx},${ty},${tz}`;
+    solidBlocks.delete(bKey);
+    markModification(tx, ty, tz, null);
+    
+    // Quick and dirty visual update: Regenerate the specific chunk
+    const cx = Math.floor(tx / chunkSize);
+    const cz = Math.floor(tz / chunkSize);
+    const chunkKey = `${cx},${cz}`;
+    if (worldChunks.has(chunkKey)) {
+        chunksGroup.remove(worldChunks.get(chunkKey));
+        worldChunks.delete(chunkKey);
+        generateChunk(cx, cz);
+    }
+}
+      
+        // --- GEOMETRY, CLOUDS & PIGS ---
+        const blockGeo = new THREE.BoxGeometry(1, 1, 1);
+        const torchGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
+        const crossGeo = new THREE.BufferGeometry();
+        const cv = new Float32Array([-0.5,-0.5,-0.5, 0.5,-0.5,0.5, 0.5,0.5,0.5, -0.5,-0.5,-0.5, 0.5,0.5,0.5, -0.5,0.5,-0.5, 0.5,-0.5,-0.5, -0.5,-0.5,0.5, -0.5,0.5,0.5, 0.5,-0.5,-0.5, -0.5,0.5,0.5, 0.5,0.5,-0.5]);
+        const cu = new Float32Array([0,0, 1,0, 1,1, 0,0, 1,1, 0,1, 0,0, 1,0, 1,1, 0,0, 1,1, 0,1]);
+        crossGeo.setAttribute('position', new THREE.BufferAttribute(cv, 3)); crossGeo.setAttribute('uv', new THREE.BufferAttribute(cu, 2)); crossGeo.computeVertexNormals();
+
+        const destroyMats = [];
+        for(let i=0; i<=9; i++){ const t = textureLoader.load(`destroy_stage_${i}.png`); t.magFilter = THREE.NearestFilter; destroyMats.push(new THREE.MeshBasicMaterial({map:t, transparent:true, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-1})); }
+        const destroyOverlay = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), destroyMats[0]); destroyOverlay.visible = false; scene.add(destroyOverlay);
+        const selectionOutline = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.005, 1.005, 1.005)), new THREE.LineBasicMaterial({color:0x000000, linewidth:2})); scene.add(selectionOutline);
+
+        const cloudTex = textureLoader.load('clouds.png'); cloudTex.magFilter = THREE.NearestFilter; cloudTex.wrapS = cloudTex.wrapT = THREE.RepeatWrapping; cloudTex.repeat.set(2, 2);
+        const cloudsMesh = new THREE.Mesh(new THREE.PlaneGeometry(4500, 4500), new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false }));
+        cloudsMesh.rotation.x = Math.PI / 2; cloudsMesh.position.y = 75; scene.add(cloudsMesh);
+
+        // -- Corrected, Anti-Bleed Pig Geometry Mapping
+        const pigTex = textureLoader.load('tex_pig.png'); 
+        pigTex.magFilter = THREE.NearestFilter;
+        pigTex.minFilter = THREE.NearestFilter; // STOPS THE EYE BLEEDING!
+        pigTex.generateMipmaps = false; 
+
+        const pigMat = new THREE.MeshLambertMaterial({map: pigTex, alphaTest: 0.5});
+        const pigRedMat = new THREE.MeshLambertMaterial({map: pigTex, color: 0xffaaaa, alphaTest: 0.5});
+
+        function setMCUVs(geo, u, v, dx, dy, dz, texW, texH) {
+            const uvs = geo.attributes.uv.array;
+            const setF = (faceIdx, x, y, w, h, rot=0) => {
+                const idx = faceIdx * 8;
+                const u1 = x / texW, u2 = (x + w) / texW;
+                const v1 = 1.0 - y / texH, v2 = 1.0 - (y + h) / texH;
+                if (rot === 0) {
+                    uvs[idx]=u1; uvs[idx+1]=v1; uvs[idx+2]=u2; uvs[idx+3]=v1; uvs[idx+4]=u1; uvs[idx+5]=v2; uvs[idx+6]=u2; uvs[idx+7]=v2;
+                } else if (rot === 2) { // 180 degrees fix for Top/Bottom mapping
+                    uvs[idx]=u2; uvs[idx+1]=v2; uvs[idx+2]=u1; uvs[idx+3]=v2; uvs[idx+4]=u2; uvs[idx+5]=v1; uvs[idx+6]=u1; uvs[idx+7]=v1;
+                }
+            };
+            
+            // Absolutely perfect BoxGeometry mappings corresponding exactly to Minecraft's Left-to-Right layout
+            setF(0, u, v + dz, dz, dy);              // +X (Right side of pig)
+            setF(1, u + dz + dx, v + dz, dz, dy);    // -X (Left side of pig)
+            setF(2, u + dz, v, dx, dz, 2);           // +Y (Top side of pig)
+            setF(3, u + dz + dx, v, dx, dz, 2);      // -Y (Bottom side of pig)
+            setF(4, u + 2*dz + dx, v + dz, dx, dy);  // +Z (Back side of pig)
+            setF(5, u + dz, v + dz, dx, dy);         // -Z (Front side of pig)
+        }
+
+        function createPigPart(dx, dy, dz, u, v, ox, oy, oz) {
+            const geo = new THREE.BoxGeometry(dx/16, dy/16, dz/16);
+            setMCUVs(geo, u, v, dx, dy, dz, 64, 32);
+            geo.translate(ox/16, oy/16, oz/16);
+            return geo;
+        }
+
+        function spawnPig(x, y, z) {
+            if (pigs.length > 20) return; 
+            const pigGroup = new THREE.Group();
+            pigGroup.position.set(x, y, z);
+            const parts = {};
+            
+            // Pig Body
+            const bodyGeo = createPigPart(10, 16, 8, 28, 8, 0, 4, -3);
+            bodyGeo.rotateX(-Math.PI / 2); // Correct negative pitch for horizontal resting posture
+            const bodyMesh = new THREE.Mesh(bodyGeo, pigMat);
+            bodyMesh.position.set(0, 11/14, 2/16);
+            pigGroup.add(bodyMesh); parts.body = bodyMesh;
+
+            // Head and Snout
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 12/16, -6/16);
+            const headGeo = createPigPart(8, 8, 8, 0, 0, 0, 0, -4);
+            const snoutGeo = createPigPart(4, 3, 1, 16, 16, 0, -1.5, -8.5);
+            const headMesh = new THREE.Mesh(headGeo, pigMat);
+            const snoutMesh = new THREE.Mesh(snoutGeo, pigMat);
+            headGroup.add(headMesh); headGroup.add(snoutMesh);
+            pigGroup.add(headGroup); parts.head = headGroup;
+
+            // 4 Legs mapped diagonally for walking
+            const leg0Geo = createPigPart(4, 6, 4, 0, 16, 0, -3, 0);
+            const leg0 = new THREE.Mesh(leg0Geo, pigMat);
+            leg0.position.set(-3/16, 6/16, 5/16);
+            pigGroup.add(leg0); parts.leg0 = leg0;
+
+            const leg1Geo = createPigPart(4, 6, 4, 0, 16, 0, -3, 0);
+            const leg1 = new THREE.Mesh(leg1Geo, pigMat);
+            leg1.position.set(3/16, 6/16, 5/16);
+            pigGroup.add(leg1); parts.leg1 = leg1;
+
+            const leg2Geo = createPigPart(4, 6, 4, 0, 16, 0, -3, 0);
+            const leg2 = new THREE.Mesh(leg2Geo, pigMat);
+            leg2.position.set(-3/16, 6/16, -7/16);
+            pigGroup.add(leg2); parts.leg2 = leg2;
+
+            const leg3Geo = createPigPart(4, 6, 4, 0, 16, 0, -3, 0);
+            const leg3 = new THREE.Mesh(leg3Geo, pigMat);
+            leg3.position.set(3/16, 6/16, -7/16);
+            pigGroup.add(leg3); parts.leg3 = leg3;
+
+            entitiesGroup.add(pigGroup);
+            pigs.push({ group: pigGroup, parts: parts, velocity: new THREE.Vector3(0,0,0), time: Math.random() * 100, speed: 0, hp: 10, hurtTime: 0 });
+        }
+
+        // --- 4. WORLD GENERATION & PERMANENCE ---
+        const simplex = new SimplexNoise();
+
+        function addBlock(x, y, z, mat, raw, bKeys) {
+            raw.push({x: x, y: y, z: z, mat: mat});
+            solidBlocks.set(`${x},${y},${z}`, mat);
+            bKeys.push(`${x},${y},${z}`);
+        }
+
+        function markModification(x, y, z, mat) {
+            const cx = Math.floor(x / chunkSize);
+            const cz = Math.floor(z / chunkSize);
+            const key = `${cx},${cz}`;
+            if (!chunkModifications.has(key)) chunkModifications.set(key, new Map());
+            chunkModifications.get(key).set(`${x},${y},${z}`, mat);
+        }
+
+        function generateSpruceTree(x, y, z, rawBlocks, bKeys) {
+            for (let i = 0; i < 8; i++) addBlock(x, y + i, z, materials.spruceLog, rawBlocks, bKeys);
+            const placeLeaf = (lx, ly, lz) => {
+                if (lx===0 && lz===0 && ly < y+8) return;
+                if (!solidBlocks.has(`${x+lx},${ly},${z+lz}`)) addBlock(x+lx, ly, z+lz, materials.spruceLeaves, rawBlocks, bKeys);
+            };
+            for(let ly=y+1; ly<=y+2; ly++) for(let lx=-2; lx<=2; lx++) for(let lz=-2; lz<=2; lz++) if(!(Math.abs(lx)===2 && Math.abs(lz)===2)) placeLeaf(lx, ly, lz);
+            for(let ly=y+3; ly<=y+4; ly++) for(let lx=-1; lx<=1; lx++) for(let lz=-1; lz<=1; lz++) placeLeaf(lx, ly, lz);
+            for(let ly=y+5; ly<=y+6; ly++) { placeLeaf(1, ly, 0); placeLeaf(-1, ly, 0); placeLeaf(0, ly, 1); placeLeaf(0, ly, -1); }
+            placeLeaf(1, y+7, 0); placeLeaf(-1, y+7, 0); placeLeaf(0, y+7, 1); placeLeaf(0, y+7, -1); placeLeaf(0, y+8, 0);
+        }
+
+        function generateOakTree(x, y, z, rawBlocks, bKeys) {
+            const h = 4 + Math.floor(Math.random() * 2);
+            for (let i = 0; i < h; i++) addBlock(x, y+i, z, materials.oakLog, rawBlocks, bKeys);
+            for (let ly = h - 3; ly <= h + 1; ly++) {
+                let r = (ly >= h) ? 1 : (ly === h + 1 ? 0 : 2);
+                for (let lx = -r; lx <= r; lx++) {
+                    for (let lz = -r; lz <= r; lz++) {
+                        if (lx === 0 && lz === 0 && ly < h) continue;
+                        if (Math.abs(lx) === r && Math.abs(lz) === r && (ly === h + 1 || Math.random() < 0.5)) continue;
+                        if (!solidBlocks.has(`${x+lx},${y+ly},${z+lz}`)) addBlock(x+lx, y+ly, z+lz, materials.leaves, rawBlocks, bKeys);
+                    }
+                }
+            }
+        }
+
+        function generateChunk(chunkX, chunkZ) {
+            const chunkKey = `${chunkX},${chunkZ}`;
+            if (worldChunks.has(chunkKey)) return;
+
+            const chunkGeo = new THREE.Group();
+            const rawBlocks = [];
+            const blocksInThisChunk = [];
+            const offsetX = chunkX * chunkSize;
+            const offsetZ = chunkZ * chunkSize;
+
+            for (let x = 0; x < chunkSize; x++) {
+                for (let z = 0; z < chunkSize; z++) {
+                    const worldX = offsetX + x;
+                    const worldZ = offsetZ + z;
+                    
+                    const n1 = simplex.noise2D(worldX * 0.005, worldZ * 0.005) * 20;
+                    const n2 = simplex.noise2D(worldX * 0.02, worldZ * 0.02) * 5;
+                    const baseHeight = Math.floor(n1 + n2) + 20;
+                    
+                    const biomeNoise = simplex.noise2D(worldX * 0.002, worldZ * 0.002);
+                    let biome = biomeNoise > 0.4 ? 'snow' : (biomeNoise > 0.1 ? 'taiga' : (biomeNoise < -0.4 ? 'desert' : 'plains'));
+
+                    let isIceLake = (biome === 'snow' && baseHeight < WATER_LEVEL && biomeNoise > 0.45);
+                    let surfaceY = isIceLake ? WATER_LEVEL : baseHeight;
+                    let topMat = biome === 'snow' ? materials.snowGrass : (biome === 'taiga' ? materials.taigaGrass : (biome === 'desert' ? materials.sand : materials.grass));
+                    let subMat = biome === 'desert' ? materials.sand : materials.dirt;
+
+                    for (let y = -WORLD_DEPTH; y <= surfaceY; y++) {
+                        if (y === -WORLD_DEPTH) { addBlock(worldX, y, worldZ, materials.bedrock, rawBlocks, blocksInThisChunk); continue; }
+
+                        let caveNoise = simplex.noise3D(worldX * 0.06, y * 0.06, worldZ * 0.06);
+                        if (y > -WORLD_DEPTH && caveNoise > 0.35 && !(isIceLake && y > baseHeight - 3)) continue; 
+
+                        let mat;
+                        if (isIceLake && y > baseHeight) mat = (surfaceY - y < 2) ? materials.ice : materials.dirt;
+                        else mat = (y === surfaceY) ? topMat : (y > surfaceY - 3 ? subMat : materials.stone);
+
+                        let coalNoise = simplex.noise3D(worldX * 0.1, y * 0.1, worldZ * 0.1);
+                        let ironNoise = simplex.noise3D(worldX * 0.15, y * 0.15 + 100, worldZ * 0.15);
+                        let goldNoise = simplex.noise3D(worldX * 0.2, y * 0.2 + 200, worldZ * 0.2);
+
+                        if (mat === materials.stone) {
+                            if (y < baseHeight - 5 && coalNoise > 0.6) mat = materials.coalore;
+                            else if (y < baseHeight - 15 && ironNoise > 0.65) mat = materials.ironore;
+                            else if (y < baseHeight - 25 && goldNoise > 0.7) mat = materials.goldore;
+                        }
+                        addBlock(worldX, y, worldZ, mat, rawBlocks, blocksInThisChunk);
+                    }
+
+                    if (!isIceLake && surfaceY > 5 && solidBlocks.has(`${worldX},${surfaceY},${worldZ}`)) {
+                        if (biome === 'taiga' && Math.random() < 0.04) generateSpruceTree(worldX, surfaceY + 1, worldZ, rawBlocks, blocksInThisChunk);
+                        else if (biome === 'snow' && Math.random() < 0.015) generateSpruceTree(worldX, surfaceY + 1, worldZ, rawBlocks, blocksInThisChunk);
+                        else if (biome === 'plains') {
+                            if (Math.random() < 0.01) generateOakTree(worldX, surfaceY + 1, worldZ, rawBlocks, blocksInThisChunk);
+                            else if (Math.random() < 0.04) addBlock(worldX, surfaceY + 1, worldZ, materials.poppy, rawBlocks, blocksInThisChunk);
+                        }
+                        if (Math.random() < 0.02 && (biome === 'plains' || biome === 'taiga')) spawnPig(worldX, surfaceY + 1, worldZ);
+                    }
+                }
+            }
+
+            if (chunkModifications.has(chunkKey)) {
+                for (const [key, mat] of chunkModifications.get(chunkKey).entries()) {
+                    const [mx, my, mz] = key.split(',').map(Number);
+                    if (mat === null) {
+                        const rIdx = rawBlocks.findIndex(b => b.x === mx && b.y === my && b.z === mz);
+                        if (rIdx !== -1) rawBlocks.splice(rIdx, 1);
+                        const bIdx = blocksInThisChunk.indexOf(key);
+                        if (bIdx !== -1) blocksInThisChunk.splice(bIdx, 1);
+                        solidBlocks.delete(key);
+                    } else {
+                        const rIdx = rawBlocks.findIndex(b => b.x === mx && b.y === my && b.z === mz);
+                        if (rIdx !== -1) rawBlocks[rIdx].mat = mat;
+                        else addBlock(mx, my, mz, mat, rawBlocks, blocksInThisChunk);
+                    }
+                }
+            }
+
+            const groupedByMat = new Map();
+            rawBlocks.forEach(b => {
+                const id = matIds.get(b.mat);
+                if (!groupedByMat.has(id)) groupedByMat.set(id, { mat: b.mat, list: [], isPlant: nonSolidMats.has(b.mat) });
+                groupedByMat.get(id).list.push(b);
+            });
+
+            const instancedMap = new Map();
+            groupedByMat.forEach((data, matId) => {
+                const instMesh = new THREE.InstancedMesh(data.isPlant ? crossGeo : blockGeo, data.mat, data.list.length);
+                const positions = [];
+                data.list.forEach((b, i) => {
+                    dummyMatrix.makeTranslation(b.x, b.y, b.z); instMesh.setMatrixAt(i, dummyMatrix); positions.push(new THREE.Vector3(b.x, b.y, b.z));
+                });
+                instMesh.instanceMatrix.needsUpdate = true; instMesh.frustumCulled = false; 
+                chunkGeo.add(instMesh);
+                instancedMap.set(matId, { mesh: instMesh, positions: positions, material: data.mat });
+            });
+            
+            chunksGroup.add(chunkGeo);
+            worldChunks.set(chunkKey, chunkGeo);
+            chunkInstancesMap.set(chunkKey, instancedMap);
+            chunkBlockMap.set(chunkKey, blocksInThisChunk);
+        }
+
+        function updateChunks() {
+            const cx = Math.floor(camera.position.x / chunkSize);
+            const cz = Math.floor(camera.position.z / chunkSize);
+            if (cx === lastChunkX && cz === lastChunkZ) return;
+            lastChunkX = cx; lastChunkZ = cz;
+
+            for (let x = -renderDistance; x <= renderDistance; x++) {
+                for (let z = -renderDistance; z <= renderDistance; z++) generateChunk(cx + x, cz + z);
+            }
+
+            for (const [key, chunkGroup] of worldChunks.entries()) {
+                const [currX, currZ] = key.split(',').map(Number);
+                if (Math.abs(currX - cx) > renderDistance + 1 || Math.abs(currZ - cz) > renderDistance + 1) {
+                    chunksGroup.remove(chunkGroup);
+                    const blocks = chunkBlockMap.get(key);
+                    if (blocks) { blocks.forEach(bKey => solidBlocks.delete(bKey)); chunkBlockMap.delete(key); }
+                    chunkGroup.traverse(node => { if (node.geometry) node.geometry.dispose(); });
+                    worldChunks.delete(key); chunkInstancesMap.delete(key);
+                }
+            }
+        }
+        
+        function spawnDroppedItem(x, y, z, mat) {
+            const isBlock = !itemsSet.has(mat) && mat !== materials.poppy && mat !== materials.torch;
+            let mesh;
+            if (isBlock) mesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), mat);
+            else {
+                const path = uiIcons.get(mat);
+                if (path) { const map = textureLoader.load(path); map.magFilter = THREE.NearestFilter; mesh = new THREE.Sprite(new THREE.SpriteMaterial({ map: map, transparent: true })); mesh.scale.set(0.4, 0.4, 0.4); } 
+                else mesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), materials.dirt);
+            }
+            mesh.position.set(x, y, z); scene.add(mesh);
+            droppedItems.push({ mesh: mesh, mat: mat, velocity: new THREE.Vector3((Math.random() - 0.5) * 3, 4, (Math.random() - 0.5) * 3) });
+        }
+
+        function updateDroppedItems(delta) {
+            for (let i = droppedItems.length - 1; i >= 0; i--) {
+                const item = droppedItems[i];
+                item.velocity.y -= 15.0 * delta; item.velocity.x -= item.velocity.x * 5.0 * delta; item.velocity.z -= item.velocity.z * 5.0 * delta;
+                const nextPos = item.mesh.position.clone().add(item.velocity.clone().multiplyScalar(delta));
+                
+                const checkKey = `${Math.floor(nextPos.x)},${Math.floor(nextPos.y)},${Math.floor(nextPos.z)}`;
+                if (!solidBlocks.has(checkKey)) item.mesh.position.copy(nextPos); else item.velocity.set(0, 0, 0); 
+                item.mesh.rotation.y += 2.0 * delta; 
+                
+                if (item.mesh.position.distanceTo(camera.position) < 1.6) { 
+                    addToInventory(item.mat); scene.remove(item.mesh); droppedItems.splice(i, 1); 
+                }
+            }
+        }
+
+        // --- 5. CONTROLS & PHYSICS ---
+        const controls = new THREE.PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('blocker');
+        const welcomeScreen = document.getElementById('welcome-screen');
+        
+        document.getElementById('welcome-btn').onclick = () => {
+            welcomeScreen.style.display = 'none'; controls.lock();
+            if (bgMusic.paused) { bgMusic.src = tracks[Math.floor(Math.random() * tracks.length)]; bgMusic.play(); }
+        };
+        blocker.onclick = () => { controls.lock(); };
+        controls.addEventListener('lock', () => blocker.style.display = 'none');
+        controls.addEventListener('unlock', () => { if (welcomeScreen.style.display === 'none' && chatInput.style.display !== 'block' && ui.inv.style.display !== 'flex') blocker.style.display = 'flex'; });
+
+        camera.position.set(8, 40, 8); 
+        const velocity = new THREE.Vector3(); const velocityXZ = new THREE.Vector3();
+        let moveF = 0, moveB = 0, moveL = 0, moveR = 0, canJump = false;
+
+        document.onkeydown = (e) => {
+            if (e.code === 'KeyT' && controls.isLocked) { controls.unlock(); chatInput.style.display = 'block'; setTimeout(()=>chatInput.focus(), 10); return; }
+            if (e.code === 'KeyE' && chatInput.style.display !== 'block') { toggleInv(); return; }
+            if (!controls.isLocked) return;
+            if (e.code === 'KeyW') moveF = 1; if (e.code === 'KeyS') moveB = 1; if (e.code === 'KeyA') moveL = 1; if (e.code === 'KeyD') moveR = 1;
+            if (e.code === 'Space' && canJump) { velocity.y = 8.5; canJump = false; }
+            if (e.key >= '1' && e.key <= '9') { activeSlot = e.key - 1; renderUI(); }
+        };
+        document.onkeyup = (e) => {
+            if (e.code === 'KeyW') moveF = 0; if (e.code === 'KeyS') moveB = 0; if (e.code === 'KeyA') moveL = 0; if (e.code === 'KeyD') moveR = 0;
+        };
+        document.onwheel = (e) => { if(controls.isLocked) { activeSlot = (activeSlot + (e.deltaY > 0 ? 1 : 8)) % 9; renderUI(); } };
+
+        function checkCollisionsForEntity(pos, halfW, height) {
+            const minPx = pos.x - halfW; const maxPx = pos.x + halfW;
+            const minPy = pos.y; const maxPy = pos.y + height;
+            const minPz = pos.z - halfW; const maxPz = pos.z + halfW;
+            for (let x = Math.round(minPx - 0.5); x <= Math.round(maxPx + 0.5); x++) {
+                for (let y = Math.round(minPy - 0.5); y <= Math.round(maxPy + 0.5); y++) {
+                    for (let z = Math.round(minPz - 0.5); z <= Math.round(maxPz + 0.5); z++) {
+                        let bMat = solidBlocks.get(`${x},${y},${z}`);
+                        if (bMat && !nonSolidMats.has(bMat)) {
+                            if (maxPx > x - 0.5 && minPx < x + 0.5 && maxPy > y - 0.5 && minPy < y + 0.5 && maxPz > z - 0.5 && minPz < z + 0.5) return true;
+                        }
+                    }
+                }
+            } return false;
+        }
+
+        function applyMovement(dx, dy, dz) {
+            const pos = camera.position;
+            const checkPos = new THREE.Vector3(pos.x, pos.y - 1.62, pos.z);
+            if (dx !== 0) { checkPos.x += dx; if (checkCollisionsForEntity(checkPos, 0.3, 1.8)) checkPos.x -= dx; else pos.x += dx; }
+            if (dz !== 0) { checkPos.z += dz; if (checkCollisionsForEntity(checkPos, 0.3, 1.8)) checkPos.z -= dz; else pos.z += dz; }
+            if (dy !== 0) {
+                checkPos.y += dy;
+                if (checkCollisionsForEntity(checkPos, 0.3, 1.8)) { if (dy < 0) { canJump = true; velocity.y = 0; } else { velocity.y = 0; } } 
+                else { pos.y += dy; canJump = false; }
+            }
+        }
+
+        // --- 6. MINING, PLACING, COMBAT & DROPS ---
+        let isMining = false, miningPos = null, miningProgress = 0;
+        document.onmousedown = (e) => {
+            if (!controls.isLocked) return;
+            if (e.button === 0) {
+                raycaster.setFromCamera({x:0, y:0}, camera);
+                // Pig Combat Checking
+                const entInts = raycaster.intersectObjects(entitiesGroup.children, true);
+                if (entInts.length > 0 && entInts[0].distance < 6) {
+                    let hitObj = entInts[0].object;
+                    let pGroup = hitObj.parent;
+                    if (pGroup && pGroup.parent !== entitiesGroup) pGroup = pGroup.parent; 
+                    
+                    let hitPig = pigs.find(p => p.group === pGroup);
+                    if (hitPig) {
+                        let aItem = inventory[activeSlot] ? inventory[activeSlot].mat : null;
+                        let dmg = (aItem && aItem.toolType === 'sword') ? aItem.speed * 2 : 2; 
+                        
+                        hitPig.hp -= dmg;
+                        hitPig.hurtTime = 0.5;
+                        
+                        const camDir = new THREE.Vector3();
+                        camera.getWorldDirection(camDir);
+                        camDir.y = 0;
+                        camDir.normalize();
+                        
+                        hitPig.velocity.x = camDir.x * 6;
+                        hitPig.velocity.z = camDir.z * 6;
+                        hitPig.velocity.y = 5;
+                        
+                        swingTime = Math.PI / 2;
+                        return; // Interrupted block breaking to punch pig!
+                    }
+                }
+                isMining = true; 
+            }
+            if (e.button === 2) {
+                raycaster.setFromCamera({x:0, y:0}, camera); const ints = raycaster.intersectObjects(chunksGroup.children, true);
+                if (ints.length > 0 && ints[0].distance < 6) {
+                    const hit = ints[0]; const p = hit.object.position;
+                    let tx, ty, tz, instMap;
+                    if (hit.object instanceof THREE.InstancedMesh) {
+                        for (const [, map] of chunkInstancesMap.entries()) { for (const [, data] of map.entries()) { if (data.mesh === hit.object) { instMap = data; break; } } if(instMap) break; }
+                        if (!instMap) return; const pos = instMap.positions[hit.instanceId];
+                        tx = Math.round(pos.x); ty = Math.round(pos.y); tz = Math.round(pos.z);
+                    } else { tx = Math.round(p.x); ty = Math.round(p.y); tz = Math.round(p.z); }
+                    
+                    const hitMat = instMap ? instMap.material : hit.object.material;
+                    if (hitMat === materials.craftingTable) { openInventory(3); return; }
+                    if (hitMat === materials.furnace) { openFurnace(); return; }
+
+                    const aItem = inventory[activeSlot]; if (!aItem || aItem.count <= 0 || itemsSet.has(aItem.mat)) return;
+                    const n = hit.face.normal; const px = Math.round(tx + n.x), py = Math.round(ty + n.y), pz = Math.round(tz + n.z);
+                    
+                    const camFeet = new THREE.Vector3(camera.position.x, camera.position.y - 1.62, camera.position.z);
+                    if (!checkCollisionsForEntity(new THREE.Vector3(px, py, pz), 0.5, 1.0) || camFeet.distanceTo(new THREE.Vector3(px, py, pz)) > 1.2) {
+                        placeBlock(px, py, pz, aItem.mat, hit.object.parent);
+                    }
+                }
+            }
+        };
+        document.onmouseup = (e) => { if (e.button === 0) isMining = false; };
+
+        const originalLock = controls.lock;
+        controls.lock = function() {
+            try { const r = originalLock.call(controls); if (r instanceof Promise) r.catch(e => { if (welcomeScreen.style.display === 'none' && chatInput.style.display !== 'block' && ui.inv.style.display !== 'flex') blocker.style.display = 'flex'; }); } catch (e) { if (welcomeScreen.style.display === 'none' && chatInput.style.display !== 'block' && ui.inv.style.display !== 'flex') blocker.style.display = 'flex'; }
+        };
+
+        function placeBlock(x, y, z, mat, parentGroup) {
+            const pKey = `${x},${y},${z}`; if (solidBlocks.has(pKey)) return;
+            let geo = blockGeo; if (nonSolidMats.has(mat)) geo = crossGeo; if (mat === materials.torch) geo = torchGeo;
+            const newB = new THREE.Mesh(geo, mat); newB.position.set(x, mat === materials.torch ? y - 0.2 : y, z);
+            if (mat === materials.torch) { const l = new THREE.PointLight(0xffddaa, 1, 12); l.position.set(x, y, z); scene.add(l); newB.userData.light = l; }
+            parentGroup.add(newB); solidBlocks.set(pKey, mat); markModification(x, y, z, mat); 
+            
+            // Clean unloader tracking so block permanence persists cleanly
+            const cx = Math.floor(x / chunkSize);
+            const cz = Math.floor(z / chunkSize);
+            const chunkKey = `${cx},${cz}`;
+            const blocks = chunkBlockMap.get(chunkKey);
+            if (blocks) blocks.push(pKey);
+
+            inventory[activeSlot].count--; if(inventory[activeSlot].count <= 0) inventory[activeSlot] = null; renderUI();
+
+          function placeBlock(x, y, z, mat, parentGroup, fromNetwork = false) {
+        }
+
+        // --- 7. INVENTORY, CRAFTING, SMELTING ---
+        const inventory = new Array(36).fill(null);
+        const craftingGrid = new Array(9).fill(null); let craftingOutput = null; let activeSlot = 0; let mouseItem = null; let craftingMode = 2; 
+
+        const ui = { hotbar: document.getElementById('hotbar-container'), inv: document.getElementById('inventory-screen'), main: document.getElementById('main-inventory'), hot: document.getElementById('hotbar-inventory'), cGrid: document.getElementById('crafting-grid'), cOut: document.getElementById('crafting-output'), mDiv: document.getElementById('mouse-item') };
+        for(let i=0; i<9; i++) ui.hotbar.appendChild(document.createElement('div'));
+
+        const recipes = [
+            { shape: [[materials.oakLog]], res: {mat: materials.oakPlanks, count: 4} }, { shape: [[materials.spruceLog]], res: {mat: materials.oakPlanks, count: 4} },
+            { shape: [[materials.oakPlanks], [materials.oakPlanks]], res: {mat: materials.stick, count: 4} },
+            { shape: [[materials.oakPlanks, materials.oakPlanks], [materials.oakPlanks, materials.oakPlanks]], res: {mat: materials.craftingTable, count: 1} },
+            { shape: [[materials.cobblestone, materials.cobblestone, materials.cobblestone], [materials.cobblestone, null, materials.cobblestone], [materials.cobblestone, materials.cobblestone, materials.cobblestone]], res: {mat: materials.furnace, count: 1} },
+            { shape: [[materials.gold_ingot]], res: {mat: materials.gold_nugget, count: 9} },
+            { shape: [[materials.oakPlanks, materials.oakPlanks, materials.oakPlanks], [null, materials.stick, null], [null, materials.stick, null]], res: {mat: materials.w_pick, count: 1} },
+            { shape: [[materials.stone, materials.stone, materials.stone], [null, materials.stick, null], [null, materials.stick, null]], res: {mat: materials.s_pick, count: 1} },
+            { shape: [[materials.gold_ingot, materials.gold_ingot, materials.gold_ingot], [null, materials.stick, null], [null, materials.stick, null]], res: {mat: materials.g_pick, count: 1} },
+            { shape: [[materials.oakPlanks], [materials.oakPlanks], [materials.stick]], res: {mat: materials.w_sword, count: 1} },
+            { shape: [[materials.oakPlanks, materials.oakPlanks], [materials.oakPlanks, materials.stick], [null, materials.stick]], res: {mat: materials.w_axe, count: 1} },
+            { shape: [[materials.oakPlanks], [materials.stick], [materials.stick]], res: {mat: materials.w_shovel, count: 1} }
+        ];
+
+        function checkRecipes() {
+            if (craftingMode === 'furnace') {
+                let input = craftingGrid[0], fuel = craftingGrid[1];
+                if (input && fuel && fuel.mat === materials.coal) {
+                    if (input.mat === materials.ironore) craftingOutput = { mat: materials.iron_ingot, count: 1 };
+                    else if (input.mat === materials.goldore) craftingOutput = { mat: materials.gold_ingot, count: 1 };
+                    else if (input.mat === materials.cobblestone) craftingOutput = { mat: materials.stone, count: 1 };
+                    else if (input.mat === materials.pork_raw) craftingOutput = { mat: materials.pork_cooked, count: 1 };
+                    else craftingOutput = null;
+                } else craftingOutput = null;
+                return;
+            }
+
+            const size = craftingMode; let minX = size, minY = size, maxX = -1, maxY = -1;
+            for(let y=0; y<size; y++){ for(let x=0; x<size; x++){ if(craftingGrid[y*size + x]) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); } } }
+            if(maxX === -1) { craftingOutput = null; return; }
+            
+            const extracted = [];
+            for(let y=minY; y<=maxY; y++){ let row = []; for(let x=minX; x<=maxX; x++) row.push(craftingGrid[y*size + x] ? craftingGrid[y*size + x].mat : null); extracted.push(row); }
+
+            for(let r of recipes) {
+                if(r.shape.length === extracted.length && r.shape[0].length === extracted[0].length) {
+                    let match = true; for(let y=0; y<extracted.length; y++) for(let x=0; x<extracted[0].length; x++) if(r.shape[y][x] !== extracted[y][x]) match = false;
+                    if(match) { craftingOutput = { mat: r.res.mat, count: r.res.count }; return; }
+                }
+            }
+            craftingOutput = null;
+        }
+
+        function toggleInv() {
+            if (ui.inv.style.display === 'flex') {
+                ui.inv.style.display = 'none';
+                if (mouseItem) { addToInventory(mouseItem.mat); mouseItem = null; } 
+                let maxSlots = craftingMode === 'furnace' ? 2 : craftingMode*craftingMode;
+                for(let i=0; i<maxSlots; i++) if(craftingGrid[i]) addToInventory(craftingGrid[i].mat); 
+                craftingGrid.fill(null); craftingOutput = null; renderUI(); controls.lock();
+            } else { openInventory(2); }
+        }
+
+        function openInventory(mode) {
+            craftingMode = mode; ui.cGrid.style.gridTemplateColumns = `repeat(${mode}, 44px)`; ui.cGrid.innerHTML = '';
+            document.getElementById('inv-title').innerText = "Crafting";
+            ui.cGrid.parentElement.querySelector('div:nth-child(2)').innerText = "➔";
+            craftingGrid.fill(null); craftingOutput = null;
+            for(let i=0; i<mode*mode; i++) { let slot = document.createElement('div'); slot.className = 'slot'; slot.onmousedown = (e) => handleSlotClick(e, 'craft', i); ui.cGrid.appendChild(slot); }
+            controls.unlock(); ui.inv.style.display = 'flex'; renderUI();
+        }
+
+        function openFurnace() {
+            craftingMode = 'furnace'; ui.cGrid.style.gridTemplateColumns = `repeat(1, 44px)`; ui.cGrid.innerHTML = '';
+            document.getElementById('inv-title').innerText = "Furnace Smelting";
+            ui.cGrid.parentElement.querySelector('div:nth-child(2)').innerText = "Smelt ➔";
+            craftingGrid.fill(null); craftingOutput = null;
+            for(let i=0; i<2; i++) { let slot = document.createElement('div'); slot.className = 'slot'; slot.onmousedown = (e) => handleSlotClick(e, 'craft', i); ui.cGrid.appendChild(slot); }
+            controls.unlock(); ui.inv.style.display = 'flex'; renderUI();
+        }
+
+        function updateHeldItem() {
+            if (currentHeldMesh) { heldItemGroup.remove(currentHeldMesh); currentHeldMesh = null; }
+            const aItem = inventory[activeSlot];
+            if (!aItem) return;
+
+            const isBlock = !itemsSet.has(aItem.mat) && aItem.mat !== materials.poppy && aItem.mat !== materials.torch;
+            if (isBlock) {
+                currentHeldMesh = new THREE.Mesh(blockGeo, aItem.mat);
+                currentHeldMesh.scale.set(0.3, 0.3, 0.3);
+                currentHeldMesh.position.set(0.4, -0.4, -0.6);
+                currentHeldMesh.rotation.set(0.1, -Math.PI / 4, 0.1);
+            } else {
+                const path = uiIcons.get(aItem.mat);
+                if (path) {
+                    const map = textureLoader.load(path); map.magFilter = THREE.NearestFilter;
+                    const mat = new THREE.SpriteMaterial({ map: map, transparent: true, depthTest: false });
+                    currentHeldMesh = new THREE.Sprite(mat);
+                    currentHeldMesh.scale.set(0.6, 0.6, 0.6);
+                    currentHeldMesh.position.set(0.4, -0.3, -0.5);
+                }
+            }
+            if (currentHeldMesh) heldItemGroup.add(currentHeldMesh);
+        }
+
+        function renderUI() {
+            if (mouseItem) { ui.mDiv.style.display = 'block'; ui.mDiv.style.backgroundImage = `url(${uiIcons.get(mouseItem.mat)})`; ui.mDiv.querySelector('.item-count').innerText = mouseItem.count > 1 ? mouseItem.count : ''; } else { ui.mDiv.style.display = 'none'; }
+            Array.from(ui.hotbar.children).forEach((slot, i) => { slot.className = i === activeSlot ? 'slot active' : 'slot'; slot.innerHTML = inventory[i] ? `<div class="item-icon" style="background-image:url(${uiIcons.get(inventory[i].mat)})"></div><span class="item-count">${inventory[i].count>1?inventory[i].count:''}</span>` : ''; });
+            
+            const populateSlot = (container, arr, index, childIndex, type) => {
+                let slot = container.children[childIndex]; 
+                if (!slot) { slot = document.createElement('div'); slot.className = 'slot'; slot.onmousedown = (e) => handleSlotClick(e, type, index); container.appendChild(slot); }
+                const item = arr[index]; slot.innerHTML = item ? `<div class="item-icon" style="background-image:url(${uiIcons.get(item.mat)})"></div><span class="item-count">${item.count>1?item.count: ''}</span>` : '';
+            };
+
+            for(let i = 9; i < 36; i++) populateSlot(ui.main, inventory, i, i - 9, 'inv');
+            for(let i = 0; i < 9; i++) populateSlot(ui.hot, inventory, i, i, 'inv');
+            let maxC = craftingMode === 'furnace' ? 2 : craftingMode*craftingMode;
+            for(let i = 0; i < maxC; i++) populateSlot(ui.cGrid, craftingGrid, i, i, 'craft');
+            
+            ui.cOut.innerHTML = craftingOutput ? `<div class="item-icon" style="background-image:url(${uiIcons.get(craftingOutput.mat)})"></div><span class="item-count">${craftingOutput.count>1?craftingOutput.count:''}</span>` : ''; ui.cOut.onmousedown = (e) => handleSlotClick(e, 'out', 0);
+            updateHeldItem();
+        }
+
+        function handleSlotClick(e, type, index) {
+            let targetArr = type === 'inv' ? inventory : (type === 'craft' ? craftingGrid : null);
+            let item = targetArr ? targetArr[index] : (type === 'out' ? craftingOutput : null);
+
+            if (e.button === 0) {
+                if (type === 'out' && craftingOutput) {
+                    if (!mouseItem) { 
+                        mouseItem = { ...craftingOutput }; craftingOutput = null; 
+                        consumeCraftingMats();
+                    } else if (mouseItem.mat === craftingOutput.mat && !isUnstackable(mouseItem.mat) && mouseItem.count + craftingOutput.count <= 64) { 
+                        mouseItem.count += craftingOutput.count; craftingOutput = null; 
+                        consumeCraftingMats(); 
+                    }
+                } else if (targetArr) {
+                    if (!mouseItem && item) { mouseItem = item; targetArr[index] = null; }
+                    else if (mouseItem && !item) { targetArr[index] = mouseItem; mouseItem = null; }
+                    else if (mouseItem && item) { 
+                        if (mouseItem.mat === item.mat && !isUnstackable(item.mat)) { 
+                            let space = 64 - item.count;
+                            if (mouseItem.count <= space) { item.count += mouseItem.count; mouseItem = null; }
+                            else { item.count = 64; mouseItem.count -= space; }
+                        } else { let temp = item; targetArr[index] = mouseItem; mouseItem = temp; } 
+                    }
+                }
+            } else if (e.button === 2) {
+                if (type === 'out') return;
+                if (!mouseItem && item) { let half = Math.ceil(item.count / 2); mouseItem = { mat: item.mat, count: half }; item.count -= half; if (item.count <= 0) targetArr[index] = null; }
+                else if (mouseItem && !item) { targetArr[index] = { mat: mouseItem.mat, count: 1 }; mouseItem.count--; if (mouseItem.count <= 0) mouseItem = null; }
+                else if (mouseItem && item && mouseItem.mat === item.mat && !isUnstackable(item.mat) && item.count < 64) { item.count++; mouseItem.count--; if (mouseItem.count <= 0) mouseItem = null; }
+            }
+            if (type === 'craft' || type === 'out') checkRecipes(); renderUI();
+        }
+
+        function consumeCraftingMats() {
+            let maxC = craftingMode === 'furnace' ? 2 : craftingMode*craftingMode;
+            for(let i=0; i<maxC; i++) if(craftingGrid[i]) { craftingGrid[i].count--; if(craftingGrid[i].count <= 0) craftingGrid[i] = null; }
+        }
+
+        document.onmousemove = (e) => { if (ui.inv.style.display === 'flex') { ui.mDiv.style.left = e.clientX - 16 + 'px'; ui.mDiv.style.top = e.clientY - 16 + 'px'; } };
+        
+        function addToInventory(mat) {
+            if (!isUnstackable(mat)) {
+                for(let i = 0; i < 36; i++) { if(inventory[i] && inventory[i].mat === mat && inventory[i].count < 64) { inventory[i].count++; renderUI(); return; } }
+            }
+            for(let i = 0; i < 36; i++) { if(!inventory[i]) { inventory[i] = { mat: mat, count: 1 }; renderUI(); return; } }
+        }
+        
+        const chatInput = document.getElementById('chat-input'); 
+        const chatMessages = document.getElementById('chat-messages');
+        
+        function addChatMessage(msg, isSystem = false) {
+            const div = document.createElement('div');
+            div.innerText = msg;
+            if (isSystem) div.style.color = '#ffff55'; 
+            chatMessages.appendChild(div);
+            if(chatMessages.children.length > 8) chatMessages.removeChild(chatMessages.firstChild);
+            setTimeout(() => { if(div.parentElement) div.parentElement.removeChild(div); }, 10000);
+        }
+
+        chatInput.onkeydown = (e) => {
+            if(e.code === 'Enter') {
+                const val = chatInput.value.trim();
+                if(val !== '') {
+                    if (val.startsWith('/')) {
+                        const args = val.substring(1).split(' ');
+                        const cmd = args[0].toLowerCase();
+                        
+                        if (cmd === 'coord' || cmd === 'coords') {
+                            addChatMessage(`[System] Coordinates: X: ${Math.round(camera.position.x)}, Y: ${Math.round(camera.position.y)}, Z: ${Math.round(camera.position.z)}`, true);
+                        } 
+                        else if (cmd === 'id') {
+                            addChatMessage(`[System] Your ID is: ${myPeerId}`, true);
+                        }
+                        else if (cmd === 'connect' && args[1]) {
+                            const targetId = args[1];
+                            addChatMessage(`[System] Connecting to ${targetId}...`, true);
+                            const conn = peer.connect(targetId);
+                            conn.on('open', () => {
+                                setupConnection(conn);
+                                addChatMessage(`[System] Successfully connected to ${targetId}!`, true);
+                            });
+                        }
+                        else {
+                            addChatMessage(`[System] Unknown command: /${cmd}`, true);
+                        }
+                    } else addChatMessage("<Player> " + val);
+                }
+                chatInput.value = ''; chatInput.style.display = 'none'; controls.lock();
+            }
+        };
+
+        // --- 8. MAIN ANIMATION LOOP ---
+        let frameCount = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            frameCount++;
+            if (frameCount % 10 === 0) updateChunks();
+            
+            updateDroppedItems(delta); 
+
+            sunMesh.position.set(camera.position.x + 20, 80, camera.position.z - 30);
+
+            // Pig Logic
+            for (let i = pigs.length - 1; i >= 0; i--) {
+                const p = pigs[i];
+                p.time += delta;
+
+                if (p.hurtTime > 0) {
+                    p.hurtTime -= delta;
+                    const hm = pigRedMat;
+                    p.parts.body.material = hm; p.parts.leg0.material = hm; p.parts.leg1.material = hm; p.parts.leg2.material = hm; p.parts.leg3.material = hm;
+                    p.parts.head.children.forEach(c => c.material = hm);
+                } else {
+                    const bm = pigMat;
+                    p.parts.body.material = bm; p.parts.leg0.material = bm; p.parts.leg1.material = bm; p.parts.leg2.material = bm; p.parts.leg3.material = bm;
+                    p.parts.head.children.forEach(c => c.material = bm);
+                }
+
+                if (p.hp <= 0) {
+                    spawnDroppedItem(p.group.position.x, p.group.position.y + 0.5, p.group.position.z, materials.pork_raw);
+                    entitiesGroup.remove(p.group);
+                    pigs.splice(i, 1);
+                    continue;
+                }
+
+                if (Math.random() < 0.02 && p.hurtTime <= 0) { 
+                    let angle = Math.random() * Math.PI * 2; 
+                    p.speed = (Math.random() > 0.3) ? 1.5 : 0; 
+                    p.velocity.x = Math.sin(angle) * p.speed; 
+                    p.velocity.z = Math.cos(angle) * p.speed;
+                }
+                
+                if (p.speed > 0.1 && p.hurtTime <= 0) {
+                    // Properly smooth track the velocity vector!
+                    let targetAngle = Math.atan2(p.velocity.x, p.velocity.z) + Math.PI;
+                    let diff = targetAngle - p.group.rotation.y;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    p.group.rotation.y += diff * 10.0 * delta;
+                    
+                    p.parts.leg0.rotation.x = Math.sin(p.time * 8) * 0.5;  // Back Right
+                    p.parts.leg1.rotation.x = -Math.sin(p.time * 8) * 0.5; // Back Left
+                    p.parts.leg2.rotation.x = -Math.sin(p.time * 8) * 0.5; // Front Right
+                    p.parts.leg3.rotation.x = Math.sin(p.time * 8) * 0.5;  // Front Left
+                } else if (p.hurtTime <= 0) { 
+                    p.velocity.x = 0; p.velocity.z = 0; 
+                    p.parts.leg0.rotation.x = p.parts.leg1.rotation.x = p.parts.leg2.rotation.x = p.parts.leg3.rotation.x = 0; 
+                }
+                
+                if (p.hurtTime > 0) {
+                    p.velocity.x -= p.velocity.x * 2.0 * delta;
+                    p.velocity.z -= p.velocity.z * 2.0 * delta;
+                }
+
+                p.velocity.y -= 25.0 * delta; 
+                
+                let nPos = p.group.position.clone();
+                nPos.x += p.velocity.x * delta; if (checkCollisionsForEntity(nPos, 0.45, 0.9)) p.velocity.x = 0; else p.group.position.x += p.velocity.x * delta;
+                nPos.copy(p.group.position); nPos.z += p.velocity.z * delta; if (checkCollisionsForEntity(nPos, 0.45, 0.9)) p.velocity.z = 0; else p.group.position.z += p.velocity.z * delta;
+                nPos.copy(p.group.position); nPos.y += p.velocity.y * delta;
+                if (checkCollisionsForEntity(nPos, 0.45, 0.9)) {
+                    if (p.velocity.y < 0 && p.speed && Math.random() < 0.2) p.velocity.y = 6.0; else p.velocity.y = 0; 
+                } else p.group.position.y += p.velocity.y * delta;
+
+                if (p.group.position.y < -50) { scene.remove(p.group); pigs.splice(i, 1); }
+            }
+
+            // Mining Logic
+            selectionOutline.visible = false;
+            
+            if (controls.isLocked) {
+                raycaster.setFromCamera({x:0, y:0}, camera);
+                const intersects = raycaster.intersectObjects(chunksGroup.children, true);
+                
+                if (intersects.length > 0 && intersects[0].distance < 6) {
+                    const hit = intersects[0]; 
+                    const targetObj = hit.object;
+                    let tx, ty, tz, bKey, hitMat, instMap;
+
+                    if (targetObj instanceof THREE.InstancedMesh) {
+                        for (const [, map] of chunkInstancesMap.entries()) { 
+                            for (const [, data] of map.entries()) { 
+                                if (data.mesh === targetObj) { instMap = data; break; } 
+                            } 
+                            if (instMap) break; 
+                        }
+                        if (instMap && instMap.positions[hit.instanceId]) {
+                            const p = instMap.positions[hit.instanceId]; 
+                            tx = Math.round(p.x); ty = Math.round(p.y); tz = Math.round(p.z); 
+                            bKey = `${tx},${ty},${tz}`; hitMat = instMap.material;
+                            selectionOutline.position.copy(p); selectionOutline.visible = true;
+                        }
+                    } else if (targetObj.geometry === blockGeo || targetObj.geometry === crossGeo || targetObj.geometry === torchGeo) {
+                        tx = Math.round(targetObj.position.x); ty = Math.round(targetObj.position.y); tz = Math.round(targetObj.position.z); 
+                        bKey = `${tx},${ty},${tz}`; hitMat = targetObj.material;
+                        selectionOutline.position.copy(targetObj.position); selectionOutline.visible = true;
+                    }
+
+                    if (isMining && hitMat) {
+                        if (miningPos !== bKey) { miningPos = bKey; miningProgress = 0; }
+                        
+                        let reqTool = hitMat.requiresTool;
+                        let actTool = inventory[activeSlot] ? inventory[activeSlot].mat : null;
+                        let isCorrectTool = actTool && actTool.toolType === hitMat.toolType;
+                        let speedMul = isCorrectTool ? (actTool.speed || 1.0) : (reqTool ? 0.1 : 1.0);
+                        
+                        // Safety check to prevent math errors crashing the frame
+                        let hardness = typeof hitMat.hardness === 'number' ? hitMat.hardness : 1.0;
+
+                        if (hardness === Infinity) miningProgress = 0;
+                        else if (hardness <= 0.01) miningProgress = 1.0;
+                        else miningProgress += (delta * speedMul) / hardness;
+
+                        if (miningProgress >= 1.0) {
+                            let dropMat = hitMat;
+                            if (dropMat === materials.leaves || dropMat === materials.spruceLeaves) dropMat = materials.stick;
+                            else if (dropMat === materials.coalore) dropMat = materials.coal;
+
+                            if (instMap) {
+                                dummyMatrix.makeScale(0, 0, 0); 
+                                targetObj.setMatrixAt(hit.instanceId, dummyMatrix); 
+                                targetObj.instanceMatrix.needsUpdate = true;
+                                solidBlocks.delete(bKey); 
+                                instMap.positions[hit.instanceId] = null; 
+                            } else {
+                                targetObj.parent.remove(targetObj); 
+                                solidBlocks.delete(bKey);
+                                if (targetObj.userData.light) scene.remove(targetObj.userData.light); 
+                            }
+                            
+                            markModification(tx, ty, tz, null); 
+                            if (!reqTool || isCorrectTool) spawnDroppedItem(tx, ty, tz, dropMat);
+                            
+                            miningPos = null; miningProgress = 0; destroyOverlay.visible = false;
+
+                          // Broadcast the broken block to peers
+                            broadcast({ type: 'block', action: 'break', x: tx, y: ty, z: tz });
+                        } else {
+                            destroyOverlay.position.set(tx, ty, tz); 
+                            destroyOverlay.visible = true;
+                            
+                            // Safe math clamp to prevent undefined texture array crashes
+                            let stage = Math.floor(miningProgress * 10);
+                            if (stage < 0) stage = 0; 
+                            if (stage > 9) stage = 9;
+                            destroyOverlay.material = destroyMats[stage];
+                        }
+                    } else { 
+                        miningPos = null; miningProgress = 0; destroyOverlay.visible = false; 
+                    }
+                } else { 
+                    miningPos = null; miningProgress = 0; destroyOverlay.visible = false; 
+                }
+
+                // Movement & Physics
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); 
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                forward.y = 0; forward.normalize(); right.y = 0; right.normalize();
+                
+                const wishDir = new THREE.Vector3(0, 0, 0);
+                if (moveF) wishDir.add(forward); 
+                if (moveB) wishDir.sub(forward); 
+                if (moveR) wishDir.add(right); 
+                if (moveL) wishDir.sub(right); 
+                if (wishDir.length() > 0) wishDir.normalize();
+
+                let floorY = Math.floor(camera.position.y - 1.62 - 0.1);
+                let floorMat = solidBlocks.get(`${Math.floor(camera.position.x)},${floorY},${Math.floor(camera.position.z)}`);
+                let friction = (floorMat === materials.ice) ? 1.5 : 12.0; 
+                
+                velocityXZ.x -= velocityXZ.x * friction * delta; 
+                velocityXZ.z -= velocityXZ.z * friction * delta;
+                if (wishDir.length() > 0) { 
+                    velocityXZ.add(wishDir.multiplyScalar(60.0 * delta)); 
+                    if (velocityXZ.length() > 5.5) velocityXZ.setLength(5.5); 
+                }
+                velocity.y -= 27.0 * delta; 
+                
+                applyMovement(velocityXZ.x * delta, 0, 0); 
+                applyMovement(0, 0, velocityXZ.z * delta); 
+                applyMovement(0, velocity.y * delta, 0);
+
+                // Hand Bobbing and Mining Animation
+                let speed = velocityXZ.length();
+                if (canJump) bobTime += speed * delta * 2.0; 
+                
+                if (isMining) {
+                    swingTime += delta * 15;
+                    if (swingTime > Math.PI * 2) swingTime -= Math.PI * 2; 
+                    heldItemGroup.rotation.x = -Math.sin(swingTime) * 0.5 - 0.2;
+                    heldItemGroup.position.z = -0.5 - Math.sin(swingTime) * 0.1;
+                } else if (swingTime > 0) {
+                    swingTime += delta * 15;
+                    if (swingTime > Math.PI * 1.5) swingTime = 0;
+                    else {
+                        heldItemGroup.rotation.x = -Math.sin(swingTime) * 0.6 - 0.2;
+                        heldItemGroup.position.z = -0.5 - Math.sin(swingTime) * 0.2;
+                    }
+                } else {
+                    swingTime = 0;
+                    heldItemGroup.rotation.x = Math.sin(bobTime) * 0.05;
+                    heldItemGroup.position.z = -0.5;
+                }
+                heldItemGroup.position.y = -0.3 + Math.abs(Math.sin(bobTime)) * 0.05;
+                heldItemGroup.position.x = 0.4 + Math.cos(bobTime) * 0.02;
+
+            } else { 
+                miningPos = null; 
+                miningProgress = 0; 
+                destroyOverlay.visible = false; 
+                
+                if (swingTime > 0) {
+                    swingTime += delta * 15;
+                    if (swingTime > Math.PI * 1.5) swingTime = 0;
+                    else {
+                        heldItemGroup.rotation.x = -Math.sin(swingTime) * 0.6 - 0.2;
+                        heldItemGroup.position.z = -0.5 - Math.sin(swingTime) * 0.2;
+                    }
+                }
+            }
+            // Send our position to connected players (throttle slightly to save bandwidth)
+            if (frameCount % 3 === 0 && Object.keys(peers).length > 0) {
+                broadcast({
+                    type: 'move',
+                    x: camera.position.x,
+                    y: camera.position.y,
+                    z: camera.position.z
+                });
+            }
+            renderer.render(scene, camera);
+        }
+
+        renderUI(); animate();
+    </script>
+</body>
+</html>
