@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Craft - Voxel Engine (Beta v12.5)</title>
+    <title>Craft - Voxel Engine Online</title>
     <style>
         /* Authentic Mojangles Font */
         @font-face {
@@ -275,9 +275,6 @@
         materials.w_axe.toolType = 'axe'; materials.w_axe.speed = 3.0; materials.s_axe.toolType = 'axe'; materials.s_axe.speed = 6.0; materials.g_axe.toolType = 'axe'; materials.g_axe.speed = 9.0;
         materials.w_shovel.toolType = 'shovel'; materials.w_shovel.speed = 3.0; materials.s_shovel.toolType = 'shovel'; materials.s_shovel.speed = 6.0; materials.g_shovel.toolType = 'shovel'; materials.g_shovel.speed = 9.0;
         materials.w_sword.toolType = 'sword'; materials.w_sword.speed = 1.5; materials.s_sword.toolType = 'sword'; materials.s_sword.speed = 1.5; materials.g_sword.toolType = 'sword'; materials.g_sword.speed = 1.5;
-
-      addChatMessage(`[System] ### Welcome to Craft Multiplayer Beta! ###`, true);
-      addChatMessage(`[System] Use /connect [ServerName] to connect to a server.`, true);
       
       // --- NETWORK MULTIPLAYER SETUP ---
 const idToMat = new Map();
@@ -795,7 +792,7 @@ function removeBlockVisual(tx, ty, tz) {
             try { const r = originalLock.call(controls); if (r instanceof Promise) r.catch(e => { if (welcomeScreen.style.display === 'none' && chatInput.style.display !== 'block' && ui.inv.style.display !== 'flex') blocker.style.display = 'flex'; }); } catch (e) { if (welcomeScreen.style.display === 'none' && chatInput.style.display !== 'block' && ui.inv.style.display !== 'flex') blocker.style.display = 'flex'; }
         };
 
-        function placeBlock(x, y, z, mat, parentGroup) {
+       function placeBlock(x, y, z, mat, parentGroup, fromNetwork = false) {
             const pKey = `${x},${y},${z}`; if (solidBlocks.has(pKey)) return;
             let geo = blockGeo; if (nonSolidMats.has(mat)) geo = crossGeo; if (mat === materials.torch) geo = torchGeo;
             const newB = new THREE.Mesh(geo, mat); newB.position.set(x, mat === materials.torch ? y - 0.2 : y, z);
@@ -809,11 +806,18 @@ function removeBlockVisual(tx, ty, tz) {
             const blocks = chunkBlockMap.get(chunkKey);
             if (blocks) blocks.push(pKey);
 
-            inventory[activeSlot].count--; if(inventory[activeSlot].count <= 0) inventory[activeSlot] = null; renderUI();
+            // ONLY decrease inventory if WE placed the block (not the network)
+            if (!fromNetwork && inventory[activeSlot]) {
+                inventory[activeSlot].count--; 
+                if(inventory[activeSlot].count <= 0) inventory[activeSlot] = null; 
+                renderUI();
+            }
 
-          function placeBlock(x, y, z, mat, parentGroup, fromNetwork = false) {
+            // If WE placed this block, broadcast it to the network
+            if (!fromNetwork) {
+                broadcast({ type: 'block', action: 'place', x: x, y: y, z: z, matId: matIds.get(mat) });
+            }
         }
-
         // --- 7. INVENTORY, CRAFTING, SMELTING ---
         const inventory = new Array(36).fill(null);
         const craftingGrid = new Array(9).fill(null); let craftingOutput = null; let activeSlot = 0; let mouseItem = null; let craftingMode = 2; 
@@ -984,7 +988,10 @@ function removeBlockVisual(tx, ty, tz) {
         
         const chatInput = document.getElementById('chat-input'); 
         const chatMessages = document.getElementById('chat-messages');
-        
+
+                  addChatMessage(`[System] ### Welcome to Craft Multiplayer Beta! ###`, true);
+      addChatMessage(`[System] Use /connect [ServerName] to connect to a server.`, true);
+            
         function addChatMessage(msg, isSystem = false) {
             const div = document.createElement('div');
             div.innerText = msg;
